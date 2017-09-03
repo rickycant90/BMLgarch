@@ -18,4 +18,5 @@ import(MSwM,
     missMDA,
     FactoMineR,
     qcc,
-    yuima)
+    yuima,
+    tseries)

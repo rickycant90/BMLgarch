@@ -1,11 +1,11 @@
-#' @title <imputeBBRIDGE>
+#' @title <imputeBBridge>
 #'
 #' @description <imputes a brownian bridge for each missing value in a dataset>
 #' @param df
 #' @export
 
 
-function(df,meanwindow=90,verbose=FALSE) {
+imputeBBridge<-function(df,meanwindow=90,verbose=FALSE) {
   df[colSums(is.na(df)) > 0]->missing
   colnames(df[colSums(is.na(df)) > 0])->nams
   i<-1

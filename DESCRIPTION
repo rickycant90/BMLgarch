@@ -29,4 +29,6 @@ Imports: MSwM (>= 1.2),
     missMDA (>= 1.11),
     FactoMineR (>= 1.36),
     qcc (>= 2.7),
-    yuima (>= 1.6.4)
+    yuima (>= 1.6.4),
+    tseries
+
