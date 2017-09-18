@@ -2,13 +2,13 @@
 Financial modeling tools and orthogonal Markov Switching GARCH models
 
 
-#####################################PLEASE READ THESE INITIAL INSTRUCTIONS##########################################
+####################PLEASE READ THESE INITIAL INSTRUCTIONS#################
 
 0) install devtools package
 1) install the package in your device using:
 
 library(devtools)
-install_github("rickycant90/BMLgarch)
+install_github("rickycant90/BMLgarch")
 
 2) load the package:
 
