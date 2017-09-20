@@ -1,3 +1,10 @@
+#' @title <PCAvariables>
+#'
+#' @description <Performing PCA and reducing a data frame dimension by discarding the less explanatory variables in terms of global variance.>
+#' @param df A data.frame object.
+#' @param n Integer, number of PCA's to simulate in order to impute missing data, with missMDA package, default is 1.
+#' @param minexpl Real number from 0 to 1, minimum proportion of explained variance to keep each column of the data.frame; default is 0.15.
+#' @export
 
 PCAvariables<-function(df,n=1,minexpl=0.15) {
 library(missMDA)

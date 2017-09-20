@@ -1,3 +1,14 @@
+#' @title <PCAportfolios>
+#'
+#' @description <Performing PCA on financial data and revealing the composition of each factor-representing portfolio.>
+#' @param selection A data.frame object.
+#' @param Center Logical, whether to center data to the mean or not, default is TRUE.
+#' @param Scale Logical, whether to standardize data or not, default is FALSE.
+#' @param ncomp Integer, number of principal components (or factors) to retain, default is 6.
+#' @export
+
+
+
 PCAportfolios<-function(selection,Center=T,Scale=F,ncomp=6) {
 
 

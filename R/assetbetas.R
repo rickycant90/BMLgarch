@@ -1,3 +1,20 @@
+#' @title <assetbetas>
+#'
+#' @description <compute conditional mean equations of MSGARCH models>
+#' @param specm A formula object for the MS conditional mean model to fit.
+#' @param wspecm A list of formulas for the weighted GLM models to fit (alternative to MS).
+#' @param dates A Date vector.
+#' @param Y A vector containing independent variable.
+#' @param k Integer, number of regimes to fit, default is 2.
+#' @param p Integer, order of lags to add in the MS specification, default is 1.
+#' @param npar Integer, number of coefficients to estimate + 1.
+#' @param df A data.frame object containing regressors and independent variable.
+#' @param wdf A "verify" object produced by BMLgarch function output.
+#' @param Aic A real number indicating the maximum desired AIC value.
+#' @export
+
+
+
 assetbetas<-function(specm,wspecm=list(),dates,Y,k=2,p=1,npar,df,wdf,Aic=-1500) {
 
   library(xts)

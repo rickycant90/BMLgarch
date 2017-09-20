@@ -1,7 +1,9 @@
 #' @title <imputeBBridge>
 #'
 #' @description <imputes a brownian bridge for each missing value in a dataset>
-#' @param df
+#' @param df A data.frame object containing missing values.
+#' @param meanwindow Integer, time interval width to compute local mean if the first value of a series is NA, default is 90.
+#' @param verbose Logical, if TRUE the initial and final value of fitted Brownian Bridges are printed at each iteration, default is FALSE.
 #' @export
 
 

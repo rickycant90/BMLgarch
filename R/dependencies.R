@@ -1,7 +1,7 @@
 #' @title <dependencies>
 #'
 #' @description <install the required dependencies located out of CRAN repository>
-#' @param
+#' @param none
 #' @export
 
 

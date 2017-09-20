@@ -1,3 +1,16 @@
+#' @title <BacktestPORTFOLIOS>
+#'
+#' @description <Rolling window backtesting of optimized portfolios>
+#' @param scenario.set A data.frame object containing all the assets in the market.
+#' @param cor.matrices A list of conditional correlation matrices.
+#' @param nroll Integer, width of the rolling window.
+#' @param q real number, quantile for VaRc estimates.
+#' @param shortsell Logic, if TRUE negative proportions are allowed in the optimized portfolios.
+#' @param max.weight real number, total capital to invest
+#' @export
+
+
+
 BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,shortsell=FALSE,max.weight=1) {
   #############################################################################
   ##### 1. Setup & Data

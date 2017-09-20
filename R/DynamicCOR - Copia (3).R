@@ -1,3 +1,11 @@
+#' @title <DynamicCOR>
+#'
+#' @description <Starting from OGARCH fitted values, computes a matrix time series object (a list) containing dynamic correlation matrices>
+#' @param htfactors a matrix containing the fitted conditional variance values of factors, estimated with PCA.
+#' @param rotated Matrix of the eigenvectors for each selected factor.
+#' @export
+
+
 DynamicCOR<-function(htfactors,rotated) {
 
 library(foreach)
