@@ -7,26 +7,43 @@
 #' @param q real number, quantile for VaRc estimates.
 #' @param shortsell Logic, if TRUE negative proportions are allowed in the optimized portfolios.
 #' @param max.weight real number, total capital to invest
+#' @param box logical, indicating whether to add or not a box constraint, minbox and maxbox are the quantities associated to that constraint.
+#' @param active logical, indicating whether to compose a dollar-neutral (0-sum) portfolio or not.
+#' @param full logical, indicating whether to add or not a full-investment constraint.
+#' @param poslim logical, indicating whether to add or not a position limit constraint, maxpos is the quantity associated to that constraint.
+#' @param diversification logical, indicating whether to add or not a diversification constraint, div is the percentage quantity associated to that constraint.
+#' @param turnover logical, indicating whether to add or not a turnover constraint, turn is the quantity associated to that constraint.
+#' @param target.return logical, indicating whether to add or not a target return constraint, ret.target is the quantity associated to that constraint.
 #' @export
 
 
 
-BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,shortsell=FALSE,max.weight=1) {
+BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),box=TRUE,active=FALSE,full=TRUE,poslim=TRUE,diversification=FALSE,turnover=FALSE,target.return=FALSE,div=0.8,turn=0.2,p=0.05,ret.target=0.05,shortsell=FALSE,max.weight=1,maxrisk=0.3,maxpos=4,minbox=-0.2,maxbox=0.2) {
   #############################################################################
   ##### 1. Setup & Data
 
-  library(fPortfolio)
-  library(quantmod)
-  library(PerformanceAnalytics)
-  library(magrittr)
-  library(fractalrock)
+  nroll=90
+  q=0.025
   library(PortfolioAnalytics)
+  library(DEoptim)
   library(ROI)
-  library(matrixcalc)
-  library(corpcor)
-  library(scenportopt)
-  library(tseries)
-  library(zoo)
+  require(ROI.plugin.glpk)
+  require(ROI.plugin.quadprog)
+  suppressWarnings(suppressMessages(invisible(library(fPortfolio))))
+  suppressWarnings(suppressMessages(invisible(library(quantmod))))
+  suppressWarnings(suppressMessages(invisible(library(PerformanceAnalytics))))
+  suppressWarnings(suppressMessages(invisible(library(magrittr))))
+  suppressWarnings(suppressMessages(invisible(library(fractalrock))))
+  suppressWarnings(suppressMessages(invisible(library(PortfolioAnalytics))))
+  suppressWarnings(suppressMessages(invisible(library(ROI))))
+  suppressWarnings(suppressMessages(invisible(library(matrixcalc))))
+  suppressWarnings(suppressMessages(invisible(library(corpcor))))
+  suppressWarnings(suppressMessages(invisible(library(scenportopt))))
+  suppressWarnings(suppressMessages(invisible(library(tseries))))
+
+
+
+
   scenario.set <- as.matrix(scenario.set)
 
   assets <- ncol(scenario.set)
@@ -51,7 +68,7 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
 
 
 
-  ### 2.2. Easy Backtesting
+  ### MARKOWITZ
 
   window <- nroll #3 months rolling window
   pos<-window+1
@@ -98,7 +115,7 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
 
 
   # Convert to xts object
-  portfolioWeights2 <- xts(matrweights,order.by=zoo::as.Date(index(matrweights)))
+  portfolioWeights2 <- xts(matrweights,order.by=as.Date(index(matrweights)))
 
 
   # Remove leading NA value
@@ -110,8 +127,8 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
   rowSums(Xt)->portfolio.returns
   # Calculate the portfolio returns of the strategy
   #portfolio.returns <- xts(rowSums(returns[index(portfolioWeights2),]*portfolioWeights2),
-  #xts(portfolio.returns,order.by=zoo::as.Date(index(portfolio.returns)))->portfolio.returns
-  xts(portfolio.returns,order.by=zoo::as.Date(index(backtestMARKOWITZ)))->portfolio.returns
+  #xts(portfolio.returns,order.by=as.Date(index(portfolio.returns)))->portfolio.returns
+  xts(portfolio.returns,order.by=as.Date(index(backtestMARKOWITZ)))->portfolio.returns
   # Add returns and weights to a list
 
 
@@ -137,18 +154,53 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
 
 
 
-
+  ##################################PORTFOLIOANALYTICS PART##############################################
 
 
 
   # initialize portfolio
-  init.portfolio <- portfolio.spec(assets = colnames(scenario.set))
+  pspec <- portfolio.spec(assets = colnames(scenario.set))
 
 
-  init.portfolio <- add.constraint(portfolio = init.portfolio, type = "full_investment")
-  init.portfolio <- add.constraint(portfolio = init.portfolio, type = "long_only")
-  minSD.portfolio <- add.objective(portfolio=init.portfolio, type="risk", name="StdDev")
-  meanES.portfolio <- add.objective(portfolio=init.portfolio, type="risk", name="ES")
+  pspec<- add.constraint(portfolio = pspec, type = "full_investment")
+
+
+  if (shortsell==FALSE) {
+    pspec <- add.constraint(portfolio = pspec, type = "long_only")
+  }
+  if (diversification==TRUE) {
+    pspec <- add.constraint(portfolio=pspec, type="diversification", div_target=div)
+  }
+  #turnover
+  if (turnover==TRUE) {
+    pspec <- add.constraint(portfolio=pspec, type="turnover", turnover_target=turn)
+  }
+  #target return
+  if (target.return==TRUE) {
+    pspec <- add.constraint(portfolio=pspec, type="return", return_target=ret.target)
+  }
+
+  # Add box constraint such that no asset can have a weight of greater than
+  # 20% or less than -20%
+  if (box==TRUE) {
+    pspec <- add.constraint(pspec, type="box", min=minbox, max=maxbox)
+  }
+  if (poslim==TRUE) {
+    # Add constraint such that we have at most n positions
+    pspec <- add.constraint(pspec, type="position_limit", max_pos=maxpos)
+  }
+  #if (beta=TRUE) {
+  # Add constraint such that the portfolio beta is between -0.25 and 0.25
+  #betas <- t(CAPM.beta(scenario.set, market, Rf))
+  #pspec <- add.constraint(pspec, type="factor_exposure", B=betas,lower=-0.25, upper=0.25)
+
+  #}
+
+
+
+  minSD.portfolio <- add.objective(portfolio=pspec, type="risk", name="StdDev",multiplier=0)
+  meanES.portfolio <- add.objective(portfolio=pspec, type="risk", name="ES",multiplier=0)
+  RB.portfolio <- add.objective(portfolio=pspec, type="risk_budget", name="ETL", arguments=list(p=0.95), max_prisk=maxrisk,multiplier=0)
 
 
   #"full_investment"
@@ -160,6 +212,8 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
   pos<-window+1
   backtestSD<-list()
   backtestES<-list()
+  backtestRB<-list()
+
   i<-1
 
   while (i<=(nrow(scenario.set)-(window+1))) {
@@ -168,16 +222,20 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
 
 
 
-      as.xts(scenario.set[(pos-window):pos,],order.by=zoo::as.Date(index(scenario.set[(pos-window):pos,])))->tscenario.set
+      as.xts(scenario.set[(pos-window):pos,],order.by=as.Date(index(scenario.set[(pos-window):pos,])))->tscenario.set
       tminSD <- optimize.portfolio(R = tscenario.set, portfolio = minSD.portfolio, optimize_method = "ROI", trace = TRUE)
       tmeanES <- optimize.portfolio(R = tscenario.set, portfolio = meanES.portfolio, optimize_method = "ROI", trace = TRUE)
+      tmeanRB <- optimize.portfolio(R = tscenario.set, portfolio = RB.portfolio, optimize_method = "ROI", trace = TRUE)
+
+
+      tminSD$weights->backtestSD[[i]]
+
+      tmeanES$weights->backtestES[[i]]
+
+      tmeanRB$weights->backtestRB[[i]]
 
 
 
-      tminSD$weights->tempport1
-      round(tempport1,4)->backtestSD[[i]]
-      tmeanES$weights->tempport2
-      round(tempport2,4)->backtestES[[i]]
       i<-i+1
 
       pos<-pos+1
@@ -192,42 +250,60 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
   scenario.set->returns
   names(backtestSD)<-index(backtestSD)
   names(backtestES)<-index(backtestES)
+  names(backtestRB)<-index(backtestRB)
 
   backtestSD->portfolioWeightsA
   backtestES->portfolioWeightsB
+  backtestRB->portfolioWeightsC
+
   i<-1
   matrweightsA<-matrix(,length(portfolioWeightsA),ncol(returns))
   matrweightsB<-matrix(,length(portfolioWeightsB),ncol(returns))
+  matrweightsC<-matrix(,length(portfolioWeightsC),ncol(returns))
+
 
   for (i in 1:length(portfolioWeightsA)) {
 
     portfolioWeightsA[[i]]->matrweightsA[i,]
     portfolioWeightsB[[i]]->matrweightsB[i,]
+    portfolioWeightsB[[i]]->matrweightsC[i,]
+
   }
   colnames(matrweightsA)<-names(portfolioWeightsA[[1]])
   colnames(matrweightsB)<-names(portfolioWeightsB[[1]])
+  colnames(matrweightsC)<-names(portfolioWeightsC[[1]])
+
 
   # Convert to xts object
-  portfolioWeights2a <- xts(matrweightsA,order.by=zoo::as.Date(index(matrweightsA)))
-  portfolioWeights2b <- xts(matrweightsB,order.by=zoo::as.Date(index(matrweightsB)))
+  portfolioWeights2a <- xts(matrweightsA,order.by=as.Date(index(matrweightsA)))
+  portfolioWeights2b <- xts(matrweightsB,order.by=as.Date(index(matrweightsB)))
+  portfolioWeights2c <- xts(matrweightsC,order.by=as.Date(index(matrweightsC)))
 
   # Remove leading NA value
   portfolioWeights2a <- portfolioWeights2b[complete.cases(portfolioWeights2a)]
   portfolioWeights2b <- portfolioWeights2b[complete.cases(portfolioWeights2b)]
+  portfolioWeights2c <- portfolioWeights2c[complete.cases(portfolioWeights2c)]
+
   # Add column names
   names(portfolioWeights2a) <- colnames(returns)
   names(portfolioWeights2b) <- colnames(returns)
+  names(portfolioWeights2c) <- colnames(returns)
 
   foreach(i=1:nrow(portfolioWeights2a),.combine='rbind') %do% round(returns[i,]*as.numeric(portfolioWeights2a[i,]),8)->Xta
   rowSums(Xta)->portfolio.returns1
 
   foreach(i=1:nrow(portfolioWeights2b),.combine='rbind') %do% round(returns[i,]*as.numeric(portfolioWeights2b[i,]),8)->Xtb
   rowSums(Xtb)->portfolio.returns2
+
+  foreach(i=1:nrow(portfolioWeights2c),.combine='rbind') %do% round(returns[i,]*as.numeric(portfolioWeights2c[i,]),8)->Xtc
+  rowSums(Xtc)->portfolio.returns3
   # Calculate the portfolio returns of the strategy
   #portfolio.returns <- xts(rowSums(returns[index(portfolioWeights2),]*portfolioWeights2),
-  #xts(portfolio.returns,order.by=zoo::as.Date(index(portfolio.returns)))->portfolio.returns
-  xts(portfolio.returns1,order.by=zoo::as.Date(index(portfolio.returns1)))->portfolio.returnsSD
-  xts(portfolio.returns2,order.by=zoo::as.Date(index(portfolio.returns2)))->portfolio.returnsES
+  #xts(portfolio.returns,order.by=as.Date(index(portfolio.returns)))->portfolio.returns
+  xts(portfolio.returns1,order.by=as.Date(index(portfolio.returns1)))->portfolio.returnsSD
+  xts(portfolio.returns2,order.by=as.Date(index(portfolio.returns2)))->portfolio.returnsES
+  xts(portfolio.returns3,order.by=as.Date(index(portfolio.returns3)))->portfolio.returnsRB
+
   # Add returns and weights to a list
 
 
@@ -239,6 +315,18 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
 
   charts.PerformanceSummary(portfolio.returnsES,main="Mean Expected Shortfall performance")
 
+  charts.PerformanceSummary(portfolio.returnsRB,main="Risk budget performance")
+
+
+
+  Return.cumulative(portfolio.returnsSD)->cumret1
+  print("MinSD portfolio cumulative return at time T")
+  print(cumret1)
+  Return.cumulative(portfolio.returnsES)->cumret2
+  print("ES portfolio cumulative return at time T")
+  print(cumret2)
+  Return.cumulative(portfolio.returnsRB)->cumret3
+  print("RB portfolio cumulative return at time T")
 
 
 
@@ -247,12 +335,7 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
 
 
 
-
-
-
-
-
-
+  ######################################SCENPORTOPT######################################
 
   ### 2.2. Easy Backtesting
 
@@ -275,14 +358,12 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
       modelport <- portfolio.model(tscenario.set)
       #optimal.portfolio(modelport)
       cvar95 <- optimal.portfolio(alpha(modelport, q))
-      mad <- optimal.portfolio(objective(modelport, "mad"))
 
 
 
       cvar95$portfolio$x->tempport1
       round(tempport1,4)->backtestcVAR[[i]]
-      mad$portfolio$x->tempport2
-      round(tempport2,4)->backtestMAD[[i]]
+
       i<-i+1
 
       pos<-pos+1
@@ -296,44 +377,42 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
 
   scenario.set->returns
   names(backtestcVAR)<-index(backtestcVAR)
-  names(backtestMAD)<-index(backtestMAD)
 
   backtestcVAR->portfolioWeightsA
-  backtestMAD->portfolioWeightsB
+
   i<-1
   matrweightsA<-matrix(,length(portfolioWeightsA),ncol(returns))
-  matrweightsB<-matrix(,length(portfolioWeightsB),ncol(returns))
+
 
   for (i in 1:length(portfolioWeightsA)) {
 
     portfolioWeightsA[[i]]->matrweightsA[i,]
-    portfolioWeightsB[[i]]->matrweightsB[i,]
+
   }
   colnames(matrweightsA)<-names(portfolioWeightsA[[1]])
-  colnames(matrweightsB)<-names(portfolioWeightsB[[1]])
+
 
   # Convert to xts object
-  portfolioWeights2a <- xts(matrweightsA,order.by=zoo::as.Date(index(matrweightsA)))
-  portfolioWeights2b <- xts(matrweightsB,order.by=zoo::as.Date(index(matrweightsB)))
+  portfolioWeights2a <- xts(matrweightsA,order.by=as.Date(index(matrweightsA)))
+
 
   # Remove leading NA value
   portfolioWeights2a <- portfolioWeights2b[complete.cases(portfolioWeights2a)]
-  portfolioWeights2b <- portfolioWeights2b[complete.cases(portfolioWeights2b)]
+
   # Add column names
   names(portfolioWeights2a) <- colnames(returns)
-  names(portfolioWeights2b) <- colnames(returns)
+
 
   foreach(i=1:nrow(portfolioWeights2a),.combine='rbind') %do% round(returns[i,]*as.numeric(portfolioWeights2a[i,]),8)->Xta
   rowSums(Xta)->portfolio.returns1
 
-  foreach(i=1:nrow(portfolioWeights2b),.combine='rbind') %do% round(returns[i,]*as.numeric(portfolioWeights2b[i,]),8)->Xtb
-  rowSums(Xtb)->portfolio.returns2
+
   # Calculate the portfolio returns of the strategy
   #portfolio.returns <- xts(rowSums(returns[index(portfolioWeights2),]*portfolioWeights2),
-  #xts(portfolio.returns,order.by=zoo::as.Date(index(portfolio.returns)))->portfolio.returns
-  xts(portfolio.returns1,order.by=zoo::as.Date(index(portfolio.returns1)))->portfolio.returnscVAR
+  #xts(portfolio.returns,order.by=as.Date(index(portfolio.returns)))->portfolio.returns
+  xts(portfolio.returns1,order.by=as.Date(index(portfolio.returns1)))->portfolio.returnscVAR
 
-  xts(portfolio.returns2,order.by=zoo::as.Date(index(portfolio.returns2)))->portfolio.returnsMAD
+
   # Add returns and weights to a list
 
 
@@ -343,7 +422,6 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
 
   charts.PerformanceSummary(portfolio.returnscVAR,main="VaR performance")
 
-  charts.PerformanceSummary(portfolio.returnsMAD,main="Mean Absolute Deviation performance")
 
 
 
@@ -352,154 +430,46 @@ BacktestPORTFOLIOS<-function(scenario.set,cor.matrices=list(),nroll=90,q=0.025,s
 
 
 
+  Return.cumulative(portfolio.returnsSD)->cumret1
+  print("MinSD portfolio cumulative return at time T")
+  print(cumret1)
+  Return.cumulative(portfolio.returnsES)->cumret2
+  print("ES portfolio cumulative return at time T")
+  print(cumret2)
 
+  Return.cumulative(portfolio.returnsRB)->cumret3
+  print("RB portfolio cumulative return at time T")
 
-  nrAssets <- ncol(returns)
-  library(quadprog)
-  library(rrcov)
-  library(matrixcalc)
-  library(corpcor)
 
-  i<-1
-  j<-1
-  portfoliot<-list()
+  Return.cumulative(portfolio.returnscVAR)->cumret5
+  print("cVAR portfolio cumulative return at time T")
+  print(cumret5)
 
-  while (i <= nrow(returns)) {
-    for (j in 1:length(cor.matrices))
-    {
 
-      as.matrix(cor.matrices[[j]])->matrt
-      colnames(matrt)<-colnames(returns)
-      rownames(matrt)<-colnames(returns)
-      nrMarginals <- ncol(matrt)
-      # no linear components in target function
-      dvec <- rep.int(0, nrMarginals)
 
-      # Fully Invested (equality constraint)
-      a <- rep.int(1, nrMarginals)
-      b <- 1
-      longOnly<-shortsell
-      if(longOnly==TRUE)
-      {
-        # Long only (>= constraint)
-        a2 <- diag(nrMarginals)
-        b2 <- rep.int(0, nrMarginals)
 
-        a <- rbind(a, a2)
-        b <- c(b, b2)
-      }
 
-      # Weights greater than -max.weight
-      a3 <- diag(nrMarginals)
-      b3 <- rep.int(-max.weight, nrMarginals)
 
-      # Weights smaller than max.weight
-      a4 <- -diag(nrMarginals)
-      b4 <- rep.int(-max.weight, nrMarginals)
 
-      Amat <- t(rbind(a, a3, a4)) # This matrix will be transposed again
-      bvec <- c(b, b3, b4)
 
-      if (is.positive.definite(matrt)==FALSE) {
 
-        make.positive.definite(matrt)->matrt
-      }
-      colnames(matrt)<-colnames(returns)
-      rownames(matrt)<-colnames(returns)
-      # Solve the quadratic problem
-      gmv <- solve.QP(Dmat=matrt, dvec=dvec, Amat=Amat,
-                      bvec=bvec, meq=1) # meq = 1 equality constraint
 
 
-      gmv$solution->portfoliot[[i]]
 
-      names(portfoliot[[i]])<-colnames(matrt)
 
-      print(c(i,j))
 
-      i<-i+1
 
-    }
 
-  }
-  names(portfoliot)<-index(portfoliot)
 
 
-  portfoliot->portfolioWeights
 
-  library(fractalrock)
 
 
 
-  #############################################################
-  ###### POSTPROCESSING of Results                      #######
-  #############################################################
-
-  i<-1
-  matrweights<-matrix(,length(portfolioWeights),ncol(returns))
-
-  for (i in 1:length(portfolioWeights)) {
-
-    portfolioWeights[[i]]->matrweights[i,]
-
-  }
-  colnames(matrweights)<-names(portfolioWeights[[1]])
-
-
-  # Convert to xts object
-  portfolioWeights2 <- xts(matrweights,order.by=zoo::as.Date(index(matrweights)))
-
-
-  # Remove leading NA value
-  portfolioWeights2 <- portfolioWeights2[complete.cases(portfolioWeights2)]
-  # Add column names
-  names(portfolioWeights2) <- names(returns)
-
-  foreach(i=1:nrow(portfolioWeights2),.combine='rbind') %do% round(returns[i,]*as.numeric(portfolioWeights2[i,]),8)->Xt
-  rowSums(Xt)->portfolio.returns
-  # Calculate the portfolio returns of the strategy
-  #portfolio.returns <- xts(rowSums(returns[index(portfolioWeights2),]*portfolioWeights2),
-  #xts(portfolio.returns,order.by=zoo::as.Date(index(portfolio.returns)))->portfolio.returns
-  xts(portfolio.returns,order.by=zoo::as.Date(index(portfolio.returns)))->portfolio.returnsGMV
-  # Add returns and weights to a list
-  portfolioWeights2->xGMV
-
-  #############################################################
-  ###### PLOTTING                                       #######
-  #############################################################
-
-  charts.PerformanceSummary(portfolio.returnsGMV,main="Global Minimum Variance performance")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  return=list(portfolios=list(xMV=portfolioWeights,xMinSD=backtestSD,xES=backtestES,xcVAR=backtestcVAR,xMAD=backtestMAD,xGMV=xGMV),
-              BACKTESTperformance=list(minSD=portfolio.returnsSD,ES=portfolio.returnsES,MV=portfolio.returns,cVAR=portfolio.returnscVAR,MAD=portfolio.returnsMAD,GMV=portfolio.returnsGMV))
+  return=list(cumulative.returns=list(minSD=cumret1,ES=cumret2,RB=cumret3,cVAR=cumret5),portfolios=list(minSD.portfolio=minSD.portfolio,meanES.portfolio=meanES.portfolio,RB.portfolio=RB.portfolio),weights=list(xMV=portfolioWeights,xMinSD=backtestSD,xES=backtestES,xRB=backtestRB,xcVAR=backtestcVAR),
+              BACKTESTperformance=list(minSD=portfolio.returnsSD,ES=portfolio.returnsES,RB=portfolio.returnsRB,MV=portfolio.returns,cVAR=portfolio.returnscVAR))
 }
+
+
+
+

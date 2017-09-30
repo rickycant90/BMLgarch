@@ -4,21 +4,38 @@
 \alias{BacktestPORTFOLIOS}
 \title{<BacktestPORTFOLIOS>}
 \usage{
-BacktestPORTFOLIOS(scenario.set, cor.matrices = list(), nroll = 90,
-  q = 0.025, shortsell = FALSE, max.weight = 1)
+BacktestPORTFOLIOS(scenario.set, cor.matrices = list(), box = TRUE,
+  active = FALSE, full = TRUE, poslim = TRUE, diversification = FALSE,
+  turnover = FALSE, target.return = FALSE, div = 0.8, turn = 0.2,
+  p = 0.05, ret.target = 0.05, shortsell = FALSE, max.weight = 1,
+  maxrisk = 0.3, maxpos = 4, minbox = -0.2, maxbox = 0.2)
 }
 \arguments{
 \item{scenario.set}{A data.frame object containing all the assets in the market.}
 
 \item{cor.matrices}{A list of conditional correlation matrices.}
 
-\item{nroll}{Integer, width of the rolling window.}
+\item{box}{logical, indicating whether to add or not a box constraint, minbox and maxbox are the quantities associated to that constraint.}
 
-\item{q}{real number, quantile for VaRc estimates.}
+\item{active}{logical, indicating whether to compose a dollar-neutral (0-sum) portfolio or not.}
+
+\item{full}{logical, indicating whether to add or not a full-investment constraint.}
+
+\item{poslim}{logical, indicating whether to add or not a position limit constraint, maxpos is the quantity associated to that constraint.}
+
+\item{diversification}{logical, indicating whether to add or not a diversification constraint, div is the percentage quantity associated to that constraint.}
+
+\item{turnover}{logical, indicating whether to add or not a turnover constraint, turn is the quantity associated to that constraint.}
+
+\item{target.return}{logical, indicating whether to add or not a target return constraint, ret.target is the quantity associated to that constraint.}
 
 \item{shortsell}{Logic, if TRUE negative proportions are allowed in the optimized portfolios.}
 
 \item{max.weight}{real number, total capital to invest}
+
+\item{nroll}{Integer, width of the rolling window.}
+
+\item{q}{real number, quantile for VaRc estimates.}
 }
 \description{
 <Rolling window backtesting of optimized portfolios>
